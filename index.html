@@ -97,6 +97,9 @@
   .tag-nobin{background:var(--hi);color:#1a1300}
   .nobin-msg{font-family:var(--sans);font-weight:700;color:var(--hi);font-size:clamp(20px,5.6vw,30px);line-height:1.12;margin-top:2px}
   .ri-bin.warn{color:var(--hi)}
+  .res-msg{font-family:var(--sans);font-weight:700;font-size:clamp(20px,5.6vw,30px);line-height:1.12;margin-top:6px}
+  .miss-msg{color:var(--bad)}
+  .res-sub{color:var(--muted);font-size:14px;margin-top:6px}
   .recent-item{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
   .recent-item:first-child{border-top:none}
   .ri-code{font-family:var(--mono);font-size:13px;color:var(--muted);flex:1;word-break:break-all}
@@ -171,12 +174,12 @@
       <div class="source" id="source">Loading stock list…</div>
       <div class="btn-row" style="margin-top:0">
         <button class="btn sm" id="reloadBtn">⟳ Reload from file</button>
-        <button class="btn sm" id="importBtn">⭱ Import CSV</button>
+        <button class="btn sm admin-only hidden" id="importBtn">⭱ Import CSV</button>
         <button class="btn sm" id="exportBtn">⭳ Export</button>
       </div>
       <input type="file" id="fileInput" accept=".csv,text/csv" class="hidden">
     </div>
-    <div class="panel">
+    <div class="panel admin-only hidden" id="adminPanel">
       <div class="label" id="formTitle">Add / edit an item</div>
       <div class="field"><input type="text" id="fCode" placeholder="Stock code" autocomplete="off" autocapitalize="characters" spellcheck="false"></div>
       <div class="grid2">
@@ -189,7 +192,7 @@
       <div class="field"><input type="text" id="search" placeholder="Search code, description or bin…" autocomplete="off"></div>
       <div class="label"><span id="listCount">0</span> items</div>
       <div id="list"><div class="empty">No items yet.</div></div>
-      <div class="hint">On GitHub Pages the app loads <code>stock.csv</code> from the same folder automatically. Export from Sage 200 with columns <code>code,description,bin</code>, commit it as <code>stock.csv</code>, and staff get the latest list on open.</div>
+      <div class="hint">This list is view-only. It loads <code>stock.csv</code> from the same folder automatically, so update stock by committing a new export to your repo. To edit on a device, open this page with <code>?admin</code> on the end of the address.</div>
     </div>
   </section>
 </main>
@@ -200,6 +203,9 @@ var KEY="binfinder.stock.v1",mem=null;
 function read(){try{var s=localStorage.getItem(KEY);return s?JSON.parse(s):[];}catch(e){return mem||[];}}
 function write(arr){mem=arr;try{localStorage.setItem(KEY,JSON.stringify(arr));}catch(e){}}
 var stock=[],recent=[],editIndex=-1;
+/* edit/delete + add form are hidden unless the page is opened with ?admin in the URL */
+var EDIT=/[?&]admin\b/i.test(location.search);
+if(EDIT){document.querySelectorAll(".admin-only").forEach(function(e){e.classList.remove("hidden");});}
 
 /* ---------- helpers ---------- */
 function norm(s){return (s||"").toString().trim().toUpperCase();}
@@ -265,8 +271,8 @@ function showResult(code){
   }else{
     state="miss";
     r.className="result show miss";
-    r.innerHTML='<div class="res-top"><span class="res-code">'+esc(code)+'</span><span class="res-tag tag-miss">Not found</span></div>'+
-      '<div class="res-name">Not in the stock list — check the code or ask a supervisor</div><div class="bin-label">Bin location</div><div class="bin">—</div>';
+    r.innerHTML='<div class="res-top"><span class="res-code">'+esc(code)+'</span><span class="res-tag tag-miss">No match</span></div>'+
+      '<div class="res-msg miss-msg">No code match</div><div class="res-sub">Check the code or ask a supervisor.</div>';
     try{navigator.vibrate&&navigator.vibrate([40,40,40]);}catch(e){}
   }
   addRecent(code,state,bin);
@@ -452,10 +458,11 @@ $("exportBtn").addEventListener("click",function(){
 function renderList(){
   var q=norm($("search").value);
   var rows=stock.filter(function(it){if(!q)return true;return norm(it.code).indexOf(q)>=0||norm(it.name).indexOf(q)>=0||norm(it.bin).indexOf(q)>=0;});
-  if(!stock.length)$("list").innerHTML='<div class="empty">No items yet. Add one, load <code>stock.csv</code>, or import a CSV.</div>';
+  if(!stock.length)$("list").innerHTML='<div class="empty">No items loaded. Tap “Reload from file” to pull the latest <code>stock.csv</code>.</div>';
   else if(!rows.length)$("list").innerHTML='<div class="empty">No matches.</div>';
   else{var html="";rows.forEach(function(it){var idx=stock.indexOf(it);
-    html+='<div class="item"><div class="it-main"><div class="it-code">'+esc(it.code)+'</div><div class="it-name">'+esc(it.name||"—")+'</div></div><span class="it-bin">'+esc(it.bin||"—")+'</span><button class="it-x" data-edit="'+idx+'">✎</button><button class="it-x" data-del="'+idx+'">✕</button></div>';});
+    var ctrls=EDIT?('<button class="it-x" data-edit="'+idx+'">✎</button><button class="it-x" data-del="'+idx+'">✕</button>'):'';
+    html+='<div class="item"><div class="it-main"><div class="it-code">'+esc(it.code)+'</div><div class="it-name">'+esc(it.name||"—")+'</div></div><span class="it-bin">'+esc(it.bin||"—")+'</span>'+ctrls+'</div>';});
     $("list").innerHTML=html;}
   updateCounts();
   $("list").querySelectorAll("[data-del]").forEach(function(b){b.addEventListener("click",function(){stock.splice(+b.dataset.del,1);persist();renderList();});});
