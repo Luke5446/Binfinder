@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#14161a">
+<title>BinFinder — Stock Locator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Saira+Condensed:wght@600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js"></script>
+<style>
+  :root{
+    --bg:#14161a; --bg2:#1c1f26; --bg3:#262a33; --line:#333845;
+    --text:#e8eaed; --muted:#8b909c;
+    --hi:#ffb300; --hi-dim:rgba(255,179,0,.14);
+    --ok:#3ddc84; --bad:#ff5247;
+    --mono:"JetBrains Mono",ui-monospace,monospace;
+    --sans:"Archivo",system-ui,sans-serif;
+    --cond:"Saira Condensed","Archivo",sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:16px;line-height:1.4;
+    background-image:radial-gradient(circle at 12% -10%,rgba(255,179,0,.05),transparent 40%),
+      radial-gradient(circle at 90% 0%,rgba(61,220,132,.04),transparent 35%);
+    background-attachment:fixed;display:flex;flex-direction:column;min-height:100vh;}
+  header{position:sticky;top:0;z-index:30;background:rgba(20,22,26,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);}
+  .hazard{height:5px;background:repeating-linear-gradient(135deg,var(--hi) 0 14px,#14161a 14px 28px);opacity:.85}
+  .bar{display:flex;align-items:center;gap:12px;padding:12px 16px}
+  .logo{font-family:var(--cond);font-weight:800;font-size:26px;letter-spacing:.5px;text-transform:uppercase;line-height:1}
+  .logo b{color:var(--hi)}
+  .count{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:5px 9px;white-space:nowrap}
+  .count b{color:var(--text)}
+  .tabs{display:flex;padding:10px 16px 0;gap:8px}
+  .tab{flex:1;background:transparent;border:1px solid var(--line);color:var(--muted);font-family:var(--sans);font-weight:700;font-size:13px;letter-spacing:1px;text-transform:uppercase;padding:11px;border-radius:9px 9px 0 0;border-bottom:none;cursor:pointer;transition:.15s}
+  .tab.on{color:var(--bg);background:var(--hi);border-color:var(--hi)}
+  main{flex:1;padding:16px;max-width:640px;width:100%;margin:0 auto}
+  .view{display:none}
+  .view.on{display:block;animation:fade .25s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .panel{background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+  .panel.tight{padding:12px 16px}
+  .label{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:8px}
+  /* camera */
+  .cam-stage{position:relative;background:#000;border-radius:12px;overflow:hidden;min-height:80px}
+  #video{width:100%;height:auto;display:block}
+  .cam-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--muted);font-size:14px;padding:22px}
+  .guide{position:absolute;left:8%;width:84%;top:38%;height:24%;border:2px dashed var(--hi);border-radius:8px;box-shadow:0 0 0 100vmax rgba(0,0,0,.35);display:none;pointer-events:none}
+  .guide.on{display:block}
+  .guide::after{content:"";position:absolute;left:6px;right:6px;top:50%;height:2px;background:linear-gradient(90deg,transparent,var(--hi),transparent);box-shadow:0 0 10px var(--hi);animation:sweep 1.6s ease-in-out infinite}
+  @keyframes sweep{0%,100%{top:18%}50%{top:82%}}
+  .cam-status{font-family:var(--mono);font-size:13px;color:var(--muted);min-height:20px;margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .cam-status .pill{color:var(--text)}
+  /* buttons */
+  .btn{font-family:var(--sans);font-weight:700;font-size:15px;border-radius:10px;cursor:pointer;padding:13px 16px;border:1px solid var(--line);background:var(--bg3);color:var(--text);transition:.15s;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+  .btn:active{transform:scale(.97)}
+  .btn.primary{background:var(--hi);color:#1a1300;border-color:var(--hi)}
+  .btn.full{width:100%}
+  .btn.ghost{background:transparent}
+  .btn.sm{padding:9px 11px;font-size:13px}
+  .btn.cand{background:var(--hi-dim);border-color:var(--hi);color:var(--hi);font-family:var(--mono);font-weight:700}
+  .btn-row{display:flex;gap:10px;margin-top:12px}
+  .btn-row>*{flex:1}
+  /* inputs */
+  input[type=text]{width:100%;font-family:var(--mono);font-size:16px;padding:14px;border-radius:10px;background:var(--bg);border:1px solid var(--line);color:var(--text);outline:none}
+  input[type=text]:focus{border-color:var(--hi)}
+  input::placeholder{color:#5b606c;text-transform:none}
+  #manual,#fCode,#fBin{text-transform:uppercase}
+  .find-input{position:relative}
+  .suggest{margin-top:8px;border:1px solid var(--line);border-radius:10px;overflow:hidden;display:none;background:var(--bg)}
+  .suggest.on{display:block}
+  .sug{display:flex;align-items:center;gap:10px;padding:11px 13px;cursor:pointer;border-top:1px solid var(--line)}
+  .sug:first-child{border-top:none}
+  .sug:active{background:var(--bg3)}
+  .sug-main{flex:1;min-width:0}
+  .sug-code{font-family:var(--mono);font-weight:700;font-size:14px}
+  .sug-name{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sug-bin{font-family:var(--mono);font-weight:700;color:var(--hi);font-size:13px}
+  /* result */
+  .result{margin-top:14px;border-radius:14px;padding:18px;border:1px solid var(--line);background:var(--bg2);display:none}
+  .result.show{display:block;animation:pop .3s cubic-bezier(.2,1.3,.4,1)}
+  @keyframes pop{from{transform:scale(.96);opacity:0}to{transform:scale(1);opacity:1}}
+  .result.found{border-color:var(--ok);box-shadow:0 0 0 1px var(--ok),0 10px 40px -20px var(--ok)}
+  .result.miss{border-color:var(--bad);box-shadow:0 0 0 1px var(--bad)}
+  .res-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:4px}
+  .res-code{font-family:var(--mono);font-size:clamp(22px,6vw,30px);font-weight:700;color:#fff;word-break:break-all;line-height:1.05}
+  .res-tag{font-size:10px;font-weight:800;letter-spacing:1.5px;padding:4px 8px;border-radius:6px;text-transform:uppercase;white-space:nowrap}
+  .tag-found{background:var(--ok);color:#04210f}
+  .tag-miss{background:var(--bad);color:#2a0502}
+  .res-name{font-size:18px;font-weight:600;margin:6px 0 14px}
+  .bin-label{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#fff;font-weight:700}
+  .bin{font-family:var(--cond);font-weight:800;text-transform:uppercase;line-height:.95;color:var(--hi);font-size:clamp(54px,18vw,104px);letter-spacing:1px;word-break:break-word}
+  .miss .bin{color:var(--bad);font-size:clamp(30px,9vw,52px)}
+  .miss .res-name{color:var(--muted)}
+  .result.nobin{border-color:var(--hi);box-shadow:0 0 0 1px var(--hi),0 10px 40px -20px var(--hi)}
+  .tag-nobin{background:var(--hi);color:#1a1300}
+  .nobin-msg{font-family:var(--sans);font-weight:700;color:var(--hi);font-size:clamp(20px,5.6vw,30px);line-height:1.12;margin-top:2px}
+  .ri-bin.warn{color:var(--hi)}
+  .recent-item{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+  .recent-item:first-child{border-top:none}
+  .ri-code{font-family:var(--mono);font-size:13px;color:var(--muted);flex:1;word-break:break-all}
+  .ri-bin{font-family:var(--mono);font-weight:700;color:var(--hi)}
+  .ri-bin.miss{color:var(--bad)}
+  .field{margin-bottom:10px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .item{display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid var(--line)}
+  .item:first-child{border-top:none}
+  .it-main{flex:1;min-width:0}
+  .it-code{font-family:var(--mono);font-size:14px;font-weight:700}
+  .it-name{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .it-bin{font-family:var(--mono);font-weight:700;color:var(--hi);background:var(--hi-dim);padding:5px 9px;border-radius:7px;font-size:13px;white-space:nowrap}
+  .it-x{background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px 6px;line-height:1}
+  .it-x:active{color:var(--bad)}
+  .empty{text-align:center;color:var(--muted);padding:24px 10px;font-size:14px}
+  .source{font-size:12px;color:var(--muted);font-family:var(--mono);margin-bottom:10px}
+  .source b{color:var(--ok)}
+  .hint{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.5}
+  .hint code{font-family:var(--mono);color:var(--hi);background:var(--hi-dim);padding:1px 5px;border-radius:4px}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<header>
+  <div class="hazard"></div>
+  <div class="bar">
+    <div class="logo">Bin<b>Finder</b></div>
+    <div class="count"><b id="cnt">0</b> items</div>
+  </div>
+  <div class="tabs">
+    <button class="tab on" data-view="scan">Find Location</button>
+    <button class="tab" data-view="stock">Stock&nbsp;List</button>
+  </div>
+</header>
+
+<main>
+  <section class="view on" id="view-scan">
+    <div class="panel">
+      <div class="label">Scan the code on the routing card</div>
+      <div class="cam-stage" id="camStage">
+        <video id="video" playsinline muted></video>
+        <div class="guide" id="guide"></div>
+        <div class="cam-placeholder" id="camPlaceholder">Tap “Start camera”, then line the code up inside the yellow box. It reads the code automatically.</div>
+      </div>
+      <div class="cam-status" id="camStatus"></div>
+      <div class="btn-row">
+        <button class="btn primary" id="camBtn">▶ Start camera</button>
+        <button class="btn" id="captureBtn" style="display:none">Read now</button>
+      </div>
+    </div>
+
+    <div class="result" id="result"></div>
+
+    <div class="panel">
+      <div class="label">Or type the code (fallback)</div>
+      <div class="find-input">
+        <input type="text" id="manual" placeholder="e.g. CJ0193LL03 — or part of a description" autocomplete="off" autocapitalize="characters" spellcheck="false">
+        <div class="suggest" id="suggest"></div>
+      </div>
+      <button class="btn full" id="lookupBtn" style="margin-top:12px">Show bin location</button>
+    </div>
+
+    <div class="panel" id="recentPanel" style="display:none">
+      <div class="label">Recent look-ups</div>
+      <div id="recent"></div>
+    </div>
+  </section>
+
+  <section class="view" id="view-stock">
+    <div class="panel tight">
+      <div class="source" id="source">Loading stock list…</div>
+      <div class="btn-row" style="margin-top:0">
+        <button class="btn sm" id="reloadBtn">⟳ Reload from file</button>
+        <button class="btn sm" id="importBtn">⭱ Import CSV</button>
+        <button class="btn sm" id="exportBtn">⭳ Export</button>
+      </div>
+      <input type="file" id="fileInput" accept=".csv,text/csv" class="hidden">
+    </div>
+    <div class="panel">
+      <div class="label" id="formTitle">Add / edit an item</div>
+      <div class="field"><input type="text" id="fCode" placeholder="Stock code" autocomplete="off" autocapitalize="characters" spellcheck="false"></div>
+      <div class="grid2">
+        <div class="field"><input type="text" id="fName" placeholder="Description"></div>
+        <div class="field"><input type="text" id="fBin" placeholder="Bin location" autocapitalize="characters" spellcheck="false"></div>
+      </div>
+      <button class="btn primary full" id="saveBtn">Add to stock list</button>
+    </div>
+    <div class="panel">
+      <div class="field"><input type="text" id="search" placeholder="Search code, description or bin…" autocomplete="off"></div>
+      <div class="label"><span id="listCount">0</span> items</div>
+      <div id="list"><div class="empty">No items yet.</div></div>
+      <div class="hint">On GitHub Pages the app loads <code>stock.csv</code> from the same folder automatically. Export from Sage 200 with columns <code>code,description,bin</code>, commit it as <code>stock.csv</code>, and staff get the latest list on open.</div>
+    </div>
+  </section>
+</main>
+
+<script>
+/* ---------- storage ---------- */
+var KEY="binfinder.stock.v1",mem=null;
+function read(){try{var s=localStorage.getItem(KEY);return s?JSON.parse(s):[];}catch(e){return mem||[];}}
+function write(arr){mem=arr;try{localStorage.setItem(KEY,JSON.stringify(arr));}catch(e){}}
+var stock=[],recent=[],editIndex=-1;
+
+/* ---------- helpers ---------- */
+function norm(s){return (s||"").toString().trim().toUpperCase();}
+function esc(s){return (s||"").toString().replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function find(code){var n=norm(code);for(var i=0;i<stock.length;i++){if(norm(stock[i].code)===n)return stock[i];}return null;}
+function $(id){return document.getElementById(id);}
+function updateCounts(){$("cnt").textContent=stock.length;$("listCount").textContent=stock.length;}
+function persist(){write(stock);rebuildCanon();}
+
+/* ---------- OCR-tolerant canonical matching ---------- */
+/* maps characters that OCR commonly confuses to one canonical form so a slightly
+   misread code still resolves to the right stock code */
+var canonMap={},canonKeys=[];
+function canon(s){return (s||"").toUpperCase().replace(/[^A-Z0-9]/g,"")
+  .replace(/[OQ]/g,"0").replace(/[IL|]/g,"1").replace(/S/g,"5").replace(/B/g,"8").replace(/Z/g,"2").replace(/G/g,"6");}
+function rebuildCanon(){
+  canonMap={};
+  stock.forEach(function(it){var k=canon(it.code);if(!k)return;(canonMap[k]=canonMap[k]||[]).push(it.code);});
+  canonKeys=Object.keys(canonMap);
+}
+function lev1(a,b){ // returns true if edit distance <=1
+  if(a===b)return true;
+  var la=a.length,lb=b.length;if(Math.abs(la-lb)>1)return false;
+  var i=0,j=0,diff=0;
+  while(i<la&&j<lb){
+    if(a[i]===b[j]){i++;j++;continue;}
+    if(++diff>1)return false;
+    if(la>lb)i++;else if(lb>la)j++;else{i++;j++;}
+  }
+  if(i<la||j<lb)diff++;
+  return diff<=1;
+}
+
+/* ---------- tabs ---------- */
+document.querySelectorAll(".tab").forEach(function(t){
+  t.addEventListener("click",function(){
+    document.querySelectorAll(".tab").forEach(function(x){x.classList.remove("on");});
+    t.classList.add("on");var v=t.dataset.view;
+    $("view-scan").classList.toggle("on",v==="scan");
+    $("view-stock").classList.toggle("on",v==="stock");
+    if(v!=="scan")stopCam();
+  });
+});
+
+/* ---------- result ---------- */
+function showResult(code){
+  hideSuggest();
+  var item=find(code),r=$("result");
+  var bin=item?(item.bin||"").trim():"";
+  var state;
+  if(item&&bin){
+    state="found";
+    r.className="result show found";
+    r.innerHTML='<div class="res-top"><span class="res-code">'+esc(item.code)+'</span><span class="res-tag tag-found">In stock</span></div>'+
+      '<div class="res-name">'+esc(item.name||"—")+'</div><div class="bin-label">Put away at</div><div class="bin">'+esc(bin)+'</div>';
+    try{navigator.vibrate&&navigator.vibrate(60);}catch(e){}
+  }else if(item){
+    state="nobin";
+    r.className="result show nobin";
+    r.innerHTML='<div class="res-top"><span class="res-code">'+esc(item.code)+'</span><span class="res-tag tag-nobin">No location</span></div>'+
+      '<div class="res-name">'+esc(item.name||"—")+'</div><div class="nobin-msg">No location, please report to your line manager.</div>';
+    try{navigator.vibrate&&navigator.vibrate([60,40,60]);}catch(e){}
+  }else{
+    state="miss";
+    r.className="result show miss";
+    r.innerHTML='<div class="res-top"><span class="res-code">'+esc(code)+'</span><span class="res-tag tag-miss">Not found</span></div>'+
+      '<div class="res-name">Not in the stock list — check the code or ask a supervisor</div><div class="bin-label">Bin location</div><div class="bin">—</div>';
+    try{navigator.vibrate&&navigator.vibrate([40,40,40]);}catch(e){}
+  }
+  addRecent(code,state,bin);
+  r.scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+function addRecent(code,state,bin){
+  recent.unshift({code:code,state:state,bin:bin});recent=recent.slice(0,8);
+  var html="";recent.forEach(function(x){
+    var txt=x.state==="found"?x.bin:(x.state==="nobin"?"no location":"not found");
+    var cls=x.state==="found"?"":(x.state==="nobin"?" warn":" miss");
+    html+='<div class="recent-item"><span class="ri-code">'+esc(x.code)+'</span><span class="ri-bin'+cls+'">'+esc(txt)+'</span></div>';
+  });
+  $("recent").innerHTML=html;$("recentPanel").style.display=recent.length?"block":"none";
+}
+
+/* ---------- typeahead ---------- */
+function hideSuggest(){$("suggest").classList.remove("on");$("suggest").innerHTML="";}
+function renderSuggest(){
+  var q=norm($("manual").value);if(!q){hideSuggest();return;}
+  var m=stock.filter(function(it){return norm(it.code).indexOf(q)>=0||norm(it.name).indexOf(q)>=0;});
+  m.sort(function(a,b){return (norm(a.code).indexOf(q)===0?0:1)-(norm(b.code).indexOf(q)===0?0:1);});
+  m=m.slice(0,7);if(!m.length){hideSuggest();return;}
+  var html="";m.forEach(function(it){html+='<div class="sug" data-code="'+esc(it.code)+'"><div class="sug-main"><div class="sug-code">'+esc(it.code)+'</div><div class="sug-name">'+esc(it.name||"—")+'</div></div><span class="sug-bin">'+esc(it.bin||"—")+'</span></div>';});
+  var s=$("suggest");s.innerHTML=html;s.classList.add("on");
+  s.querySelectorAll(".sug").forEach(function(el){el.addEventListener("click",function(){$("manual").value=el.dataset.code;showResult(el.dataset.code);});});
+}
+$("manual").addEventListener("input",renderSuggest);
+$("manual").addEventListener("keydown",function(e){if(e.key==="Enter")$("lookupBtn").click();});
+$("lookupBtn").addEventListener("click",function(){var v=$("manual").value.trim();if(v)showResult(v);});
+document.addEventListener("click",function(e){if(!e.target.closest(".find-input"))hideSuggest();});
+
+/* ---------- camera + OCR ---------- */
+var video=$("video"),stream=null,camOn=false,busy=false,loopT=null;
+var worker=null,workerReady=false,workerInit=false;
+var barcodeDet=null;
+var ocrCanvas=document.createElement("canvas"),ocrCtx=ocrCanvas.getContext("2d",{willReadFrequently:true});
+var bcCanvas=document.createElement("canvas"),bcCtx=bcCanvas.getContext("2d");
+
+function camStatus(html){$("camStatus").innerHTML=html;}
+try{ if("BarcodeDetector" in window){ barcodeDet=new BarcodeDetector(); } }catch(e){}
+
+async function ensureWorker(){
+  if(workerReady)return true; if(workerInit)return false; workerInit=true;
+  camStatus('<span>Loading text reader…</span>');
+  try{
+    worker=await Tesseract.createWorker("eng");
+    await worker.setParameters({tessedit_char_whitelist:"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",tessedit_pageseg_mode:"7"});
+    workerReady=true;
+  }catch(e){ camStatus('<span style="color:var(--bad)">Text reader failed to load — check connection, or type the code below.</span>'); }
+  workerInit=false; return workerReady;
+}
+
+$("camBtn").addEventListener("click",function(){ camOn?stopCam():startCam(); });
+$("captureBtn").addEventListener("click",function(){ if(camOn&&!busy)scanFrame(true); });
+
+async function startCam(){
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}}});
+    video.srcObject=stream; await video.play();
+    camOn=true;
+    $("camPlaceholder").style.display="none";
+    $("guide").classList.add("on");
+    $("camBtn").textContent="■ Stop camera"; $("camBtn").classList.remove("primary");
+    $("captureBtn").style.display="";
+    camStatus('<span>Point at the code…</span>');
+    ensureWorker();
+    loopT=setTimeout(loop,400);
+  }catch(err){
+    camStatus('<span style="color:var(--bad)">Couldn’t open the camera ('+esc(err&&err.name||"")+'). Type the code below instead.</span>');
+  }
+}
+function stopCam(){
+  camOn=false; if(loopT){clearTimeout(loopT);loopT=null;}
+  if(stream){stream.getTracks().forEach(function(t){t.stop();});stream=null;}
+  video.srcObject=null;
+  $("guide").classList.remove("on");
+  $("camPlaceholder").style.display="flex";
+  $("camBtn").textContent="▶ Start camera"; $("camBtn").classList.add("primary");
+  $("captureBtn").style.display="none";
+}
+async function loop(){
+  if(!camOn)return;
+  if(!busy && video.readyState>=2 && video.videoWidth) await scanFrame(false);
+  if(camOn)loopT=setTimeout(loop,150);
+}
+function drawCrops(){
+  var W=video.videoWidth,H=video.videoHeight;
+  // OCR crop = the band inside the yellow guide, scaled up + grayscale for accuracy
+  var sx=W*0.08,sw=W*0.84,sy=H*0.38,sh=H*0.24;
+  ocrCanvas.width=Math.round(sw*2);ocrCanvas.height=Math.round(sh*2);
+  ocrCtx.drawImage(video,sx,sy,sw,sh,0,0,ocrCanvas.width,ocrCanvas.height);
+  var d=ocrCtx.getImageData(0,0,ocrCanvas.width,ocrCanvas.height),p=d.data;
+  for(var i=0;i<p.length;i+=4){var g=(p[i]*.3+p[i+1]*.59+p[i+2]*.11);g=(g-128)*1.4+128;g=g<0?0:g>255?255:g;p[i]=p[i+1]=p[i+2]=g;}
+  ocrCtx.putImageData(d,0,0);
+  // full frame for barcode detection
+  bcCanvas.width=W;bcCanvas.height=H;bcCtx.drawImage(video,0,0,W,H);
+}
+async function scanFrame(manual){
+  busy=true;
+  drawCrops();
+  // 1) barcode (if supported)
+  if(barcodeDet){
+    try{var codes=await barcodeDet.detect(bcCanvas);if(codes&&codes.length){accept(codes[0].rawValue);busy=false;return;}}catch(e){}
+  }
+  // 2) OCR
+  if(workerReady){
+    try{
+      var res=await worker.recognize(ocrCanvas);
+      processOCR(res.data.text,manual);
+    }catch(e){}
+  }else if(!manual){ camStatus('<span>Getting the text reader ready…</span>'); }
+  busy=false;
+}
+function processOCR(text,manual){
+  var up=(text||"").toUpperCase();
+  var tokens=up.match(/[A-Z0-9]{4,}/g)||[];
+  var stripped=up.replace(/[^A-Z0-9]/g,"");if(stripped.length>=4)tokens.push(stripped);
+  var exact={},near={};
+  tokens.forEach(function(tok){
+    var c=canon(tok);
+    if(canonMap[c]){canonMap[c].forEach(function(real){exact[real]=1;});}
+    if(canonKeys.length<8000){
+      for(var k=0;k<canonKeys.length;k++){ if(lev1(c,canonKeys[k]))canonMap[canonKeys[k]].forEach(function(real){near[real]=1;}); }
+    }
+  });
+  var ex=Object.keys(exact),nr=Object.keys(near).filter(function(x){return !exact[x];});
+  if(ex.length===1){accept(ex[0]);return;}
+  var cands=ex.concat(nr).slice(0,4);
+  if(cands.length){
+    var html='<span class="pill">Did you mean:</span>';
+    cands.forEach(function(c){html+='<button class="btn sm cand" data-pick="'+esc(c)+'">'+esc(c)+'</button>';});
+    camStatus(html);
+    $("camStatus").querySelectorAll("[data-pick]").forEach(function(b){b.addEventListener("click",function(){accept(b.dataset.pick);});});
+  }else if(manual){ camStatus('<span>No code recognised — try again or type it below.</span>'); }
+  else{ camStatus('<span>Reading…</span>'); }
+}
+function accept(code){
+  stopCam();
+  $("manual").value=code;
+  showResult(code);
+}
+
+/* ---------- CSV ---------- */
+function parseCSV(text){
+  var rows=[],row=[],cur="",q=false;
+  for(var i=0;i<text.length;i++){var c=text[i];
+    if(q){if(c==='"'){if(text[i+1]==='"'){cur+='"';i++;}else q=false;}else cur+=c;}
+    else{if(c==='"')q=true;else if(c===','){row.push(cur);cur="";}
+      else if(c==='\n'||c==='\r'){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cur);rows.push(row);row=[];cur="";}else cur+=c;}}
+  if(cur.length||row.length){row.push(cur);rows.push(row);}
+  return rows.filter(function(r){return r.some(function(x){return x.trim()!=="";});});
+}
+function csvToItems(text){
+  var rows=parseCSV(text);if(!rows.length)return [];
+  var head=rows[0].map(function(h){return h.trim().toLowerCase();});
+  var hasHeader=head.some(function(h){return h.indexOf("code")>=0||h.indexOf("bin")>=0||h.indexOf("desc")>=0||h.indexOf("location")>=0||h.indexOf("name")>=0;});
+  var ci=0,ni=1,bi=2,start=0;
+  if(hasHeader){start=1;
+    var fc=head.findIndex(function(h){return h.indexOf("code")>=0;});if(fc>=0)ci=fc;
+    var fb=head.findIndex(function(h){return h.indexOf("bin")>=0||h.indexOf("location")>=0;});if(fb>=0)bi=fb;
+    var fn=head.findIndex(function(h){return h.indexOf("desc")>=0||h.indexOf("name")>=0;});if(fn>=0)ni=fn;}
+  var items=[];
+  for(var i=start;i<rows.length;i++){var r=rows[i],code=(r[ci]||"").trim();if(!code)continue;items.push({code:code,name:(r[ni]||"").trim(),bin:(r[bi]||"").trim()});}
+  return items;
+}
+function mergeItems(items){items.forEach(function(o){var ex=stock.findIndex(function(s){return norm(s.code)===norm(o.code);});if(ex>=0)stock[ex]=o;else stock.push(o);});}
+$("importBtn").addEventListener("click",function(){$("fileInput").click();});
+$("fileInput").addEventListener("change",function(e){
+  var f=e.target.files[0];if(!f)return;var rd=new FileReader();
+  rd.onload=function(){var items=csvToItems(rd.result);if(!items.length){alert("No rows found in that file.");return;}
+    mergeItems(items);persist();renderList();setSource("imported file · "+stock.length+" items");
+    alert("Imported "+items.length+" item"+(items.length===1?"":"s")+". Total: "+stock.length+".");};
+  rd.readAsText(f);e.target.value="";
+});
+$("exportBtn").addEventListener("click",function(){
+  if(!stock.length){alert("Stock list is empty.");return;}
+  var lines=["code,description,bin"];
+  stock.forEach(function(it){function qv(v){v=(v||"").toString();return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}lines.push([qv(it.code),qv(it.name),qv(it.bin)].join(","));});
+  var blob=new Blob([lines.join("\n")],{type:"text/csv"});var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="stock.csv";a.click();URL.revokeObjectURL(a.href);
+});
+
+/* ---------- stock list ---------- */
+function renderList(){
+  var q=norm($("search").value);
+  var rows=stock.filter(function(it){if(!q)return true;return norm(it.code).indexOf(q)>=0||norm(it.name).indexOf(q)>=0||norm(it.bin).indexOf(q)>=0;});
+  if(!stock.length)$("list").innerHTML='<div class="empty">No items yet. Add one, load <code>stock.csv</code>, or import a CSV.</div>';
+  else if(!rows.length)$("list").innerHTML='<div class="empty">No matches.</div>';
+  else{var html="";rows.forEach(function(it){var idx=stock.indexOf(it);
+    html+='<div class="item"><div class="it-main"><div class="it-code">'+esc(it.code)+'</div><div class="it-name">'+esc(it.name||"—")+'</div></div><span class="it-bin">'+esc(it.bin||"—")+'</span><button class="it-x" data-edit="'+idx+'">✎</button><button class="it-x" data-del="'+idx+'">✕</button></div>';});
+    $("list").innerHTML=html;}
+  updateCounts();
+  $("list").querySelectorAll("[data-del]").forEach(function(b){b.addEventListener("click",function(){stock.splice(+b.dataset.del,1);persist();renderList();});});
+  $("list").querySelectorAll("[data-edit]").forEach(function(b){b.addEventListener("click",function(){var it=stock[+b.dataset.edit];editIndex=+b.dataset.edit;$("fCode").value=it.code;$("fName").value=it.name||"";$("fBin").value=it.bin||"";$("formTitle").textContent="Edit item";$("saveBtn").textContent="Update item";window.scrollTo({top:0,behavior:"smooth"});});});
+}
+$("search").addEventListener("input",renderList);
+$("saveBtn").addEventListener("click",function(){
+  var code=$("fCode").value.trim();if(!code){$("fCode").focus();return;}
+  var obj={code:code,name:$("fName").value.trim(),bin:$("fBin").value.trim()};
+  if(editIndex>=0){stock[editIndex]=obj;editIndex=-1;$("formTitle").textContent="Add / edit an item";$("saveBtn").textContent="Add to stock list";}
+  else{var ex=stock.findIndex(function(s){return norm(s.code)===norm(code);});if(ex>=0)stock[ex]=obj;else stock.push(obj);}
+  persist();$("fCode").value=$("fName").value=$("fBin").value="";$("fCode").focus();renderList();
+});
+
+/* ---------- source + load ---------- */
+function setSource(t){$("source").innerHTML=t;}
+function loadRemote(announce){
+  return fetch("stock.csv",{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.text();})
+  .then(function(text){var items=csvToItems(text);if(!items.length)throw 0;
+    stock=items;persist();renderList();setSource("<b>stock.csv</b> · "+items.length+" items loaded");
+    if(announce)alert("Reloaded "+items.length+" items from stock.csv.");return true;})
+  .catch(function(){return false;});
+}
+$("reloadBtn").addEventListener("click",function(){loadRemote(true).then(function(ok){if(!ok)alert("No stock.csv found next to this page. Host it on GitHub Pages, or use Import CSV.");});});
+function loadSample(){
+  stock=[{code:"CJ1093LL01",name:"Large white chef jacket",bin:"AA01"},
+    {code:"CJ1093LL02",name:"Medium white chef jacket",bin:"AA01"},
+    {code:"CJ0193LL03",name:"Large black chef trousers",bin:"AA02"},
+    {code:"TR2204SS01",name:"Small navy apron",bin:"AB05"},
+    {code:"HT0087",name:"Chef skull cap",bin:"AC12"},
+    {code:"5012345678900",name:"Oven cloth (barcoded)",bin:"AD03"}];
+  persist();renderList();setSource("sample data · 6 items (replace with your stock.csv)");
+}
+function init(){
+  loadRemote(false).then(function(ok){
+    if(!ok){var saved=read();if(saved.length){stock=saved;rebuildCanon();setSource("saved on this device · "+saved.length+" items");}else loadSample();renderList();}
+    updateCounts();
+  });
+}
+init();
+</script>
+</body>
+</html>
