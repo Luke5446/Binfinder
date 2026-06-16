@@ -84,15 +84,19 @@
   .result.found{border-color:var(--ok);box-shadow:0 0 0 1px var(--ok),0 10px 40px -20px var(--ok)}
   .result.miss{border-color:var(--bad);box-shadow:0 0 0 1px var(--bad)}
   .res-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:4px}
-  .res-code{font-family:var(--mono);font-size:14px;color:var(--muted);word-break:break-all}
+  .res-code{font-family:var(--mono);font-size:clamp(22px,6vw,30px);font-weight:700;color:#fff;word-break:break-all;line-height:1.05}
   .res-tag{font-size:10px;font-weight:800;letter-spacing:1.5px;padding:4px 8px;border-radius:6px;text-transform:uppercase;white-space:nowrap}
   .tag-found{background:var(--ok);color:#04210f}
   .tag-miss{background:var(--bad);color:#2a0502}
   .res-name{font-size:18px;font-weight:600;margin:6px 0 14px}
-  .bin-label{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .bin-label{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#fff;font-weight:700}
   .bin{font-family:var(--cond);font-weight:800;text-transform:uppercase;line-height:.95;color:var(--hi);font-size:clamp(54px,18vw,104px);letter-spacing:1px;word-break:break-word}
   .miss .bin{color:var(--bad);font-size:clamp(30px,9vw,52px)}
   .miss .res-name{color:var(--muted)}
+  .result.nobin{border-color:var(--hi);box-shadow:0 0 0 1px var(--hi),0 10px 40px -20px var(--hi)}
+  .tag-nobin{background:var(--hi);color:#1a1300}
+  .nobin-msg{font-family:var(--sans);font-weight:700;color:var(--hi);font-size:clamp(20px,5.6vw,30px);line-height:1.12;margin-top:2px}
+  .ri-bin.warn{color:var(--hi)}
   .recent-item{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
   .recent-item:first-child{border-top:none}
   .ri-code{font-family:var(--mono);font-size:13px;color:var(--muted);flex:1;word-break:break-all}
@@ -244,22 +248,37 @@ document.querySelectorAll(".tab").forEach(function(t){
 function showResult(code){
   hideSuggest();
   var item=find(code),r=$("result");
-  r.className="result show "+(item?"found":"miss");
-  if(item){
+  var bin=item?(item.bin||"").trim():"";
+  var state;
+  if(item&&bin){
+    state="found";
+    r.className="result show found";
     r.innerHTML='<div class="res-top"><span class="res-code">'+esc(item.code)+'</span><span class="res-tag tag-found">In stock</span></div>'+
-      '<div class="res-name">'+esc(item.name||"—")+'</div><div class="bin-label">Put away at</div><div class="bin">'+esc(item.bin||"—")+'</div>';
+      '<div class="res-name">'+esc(item.name||"—")+'</div><div class="bin-label">Put away at</div><div class="bin">'+esc(bin)+'</div>';
     try{navigator.vibrate&&navigator.vibrate(60);}catch(e){}
+  }else if(item){
+    state="nobin";
+    r.className="result show nobin";
+    r.innerHTML='<div class="res-top"><span class="res-code">'+esc(item.code)+'</span><span class="res-tag tag-nobin">No location</span></div>'+
+      '<div class="res-name">'+esc(item.name||"—")+'</div><div class="nobin-msg">No location, please report to your line manager.</div>';
+    try{navigator.vibrate&&navigator.vibrate([60,40,60]);}catch(e){}
   }else{
+    state="miss";
+    r.className="result show miss";
     r.innerHTML='<div class="res-top"><span class="res-code">'+esc(code)+'</span><span class="res-tag tag-miss">Not found</span></div>'+
       '<div class="res-name">Not in the stock list — check the code or ask a supervisor</div><div class="bin-label">Bin location</div><div class="bin">—</div>';
     try{navigator.vibrate&&navigator.vibrate([40,40,40]);}catch(e){}
   }
-  addRecent(code,item);
+  addRecent(code,state,bin);
   r.scrollIntoView({behavior:"smooth",block:"nearest"});
 }
-function addRecent(code,item){
-  recent.unshift({code:code,bin:item?item.bin:null});recent=recent.slice(0,8);
-  var html="";recent.forEach(function(x){html+='<div class="recent-item"><span class="ri-code">'+esc(x.code)+'</span><span class="ri-bin'+(x.bin?'':' miss')+'">'+esc(x.bin||"not found")+'</span></div>';});
+function addRecent(code,state,bin){
+  recent.unshift({code:code,state:state,bin:bin});recent=recent.slice(0,8);
+  var html="";recent.forEach(function(x){
+    var txt=x.state==="found"?x.bin:(x.state==="nobin"?"no location":"not found");
+    var cls=x.state==="found"?"":(x.state==="nobin"?" warn":" miss");
+    html+='<div class="recent-item"><span class="ri-code">'+esc(x.code)+'</span><span class="ri-bin'+cls+'">'+esc(txt)+'</span></div>';
+  });
   $("recent").innerHTML=html;$("recentPanel").style.display=recent.length?"block":"none";
 }
 
